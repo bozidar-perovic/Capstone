@@ -1,9 +1,7 @@
-import string
-
 import pandas as pd
 
 # Loading the data from the CSV file
-def load_data(file_path):
+def load_data(file_path) -> pd.DataFrame | None:
     try:
         data = pd.read_csv(file_path)
         return data
@@ -17,36 +15,40 @@ def load_data(file_path):
         print("Error: There was a parsing error while reading the file.")
         return None
 
-# Testing the data loading and iterating over the DataFrame and implementing the keyword extraction logic
-def main():
-    data = load_data("src/data/train_set_1.csv")
-    if data is not None:
-        print("Data loaded successfully:")
-        print(data.head())
-    else:
+def rule_based_solution(file_path):
+
+    # Load the data from the CSV file
+    data = load_data(file_path)
+    if data is None:
         print("Failed to load data.")
+        return 0
+    
+    # Iterate through each row in the DataFrame
+    for row in data.itertuples(index=False):
+        
+        total_score = 0
+        thread_sleep_score = 0
+        new_thread_score = 0
 
-    df = data[["id", "full_code"]]
+        # Extract the full_code from the row
+        test_method = row.full_code
 
-    # Itterates through out the entire file and checks for the keywords in the full_code column and prints out the test method if it finds any of the keywords
-    for i in range(len(df)):
-        test_method = df.iloc[i]["full_code"]
-        keywords = [word for word in test_method.split() if word not in string.punctuation]
-        for i in range(len(keywords)):
-            if keywords[i] == "Thread.sleep(50);":
-                print("Found a test with thread sleep of 50 milliseconds.")
-                break
-            if keywords[i] == "Thread.sleep(500);":
-                print("Found a test with thread sleep of 500 milliseconds.")
-                break
-            if keywords[i] == "Thread.sleep(100);":
-                print("Found a test with thread sleep of 100 milliseconds.")
-                break
-            if keywords[i] == "Thread.sleep(10);":
-                print("Found a test with thread sleep of 10 milliseconds.")
-                break
+        # Convert to string and handle None values
+        if isinstance(test_method, str) and "Thread.sleep(" in test_method:
+            thread_sleep_score = 1
+            print("Found Thread.sleep in:", row.full_code)
 
+        # Check for new thread creation
+        if isinstance(test_method, str) and "new Thread(" in test_method:
+            new_thread_score = 1
+            print("Found new thread in:", row.full_code)
+
+        total_score += thread_sleep_score + new_thread_score
+
+        return total_score
 
 
 if __name__ == "__main__":
-    main()
+
+    x = rule_based_solution("src/data/train_set_1.csv")
+    print(x)
