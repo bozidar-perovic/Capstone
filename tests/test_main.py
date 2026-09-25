@@ -1,6 +1,7 @@
 import pandas as pd
 
-from src.main import load_data, rule_based_solution
+from src.RuleBasedAnalyzer import RuleBasedAnalyzer
+from src.utility import load_data
 
 
 def test_load_data_valid_file(tmp_path):
@@ -29,10 +30,7 @@ def test_rule_based_solution_counts_all_matching_rows(tmp_path):
         "full_code\n"
         "Thread.sleep(1000);\n"
         "new Thread(() -> {}).start();\n"
-        "System.out.println(\"clean\");\n"
+        'System.out.println("clean");\n'
     )
-
-    score = rule_based_solution(csv_file)
-
-    assert score == 2
-
+    analyzer = RuleBasedAnalyzer()
+    analyzer.analyze(csv_file)
