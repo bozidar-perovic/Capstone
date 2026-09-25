@@ -1,6 +1,7 @@
-from BaseAnalyzer import BaseAnalyzer
+from .BaseAnalyzer import BaseAnalyzer
+
 
 class MLAnalyzer(BaseAnalyzer):
 
-	def __init__(self):
-		super().__init__()
+    def __init__(self):
+        super().__init__()

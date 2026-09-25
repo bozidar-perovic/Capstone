@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 # Loading the data from the CSV file
 def load_data(file_path) -> pd.DataFrame | None:
     try:
@@ -15,6 +16,7 @@ def load_data(file_path) -> pd.DataFrame | None:
         print("Error: There was a parsing error while reading the file.")
         return None
 
+
 def rule_based_solution(file_path) -> int:
 
     # Load the data from the CSV file
@@ -22,12 +24,11 @@ def rule_based_solution(file_path) -> int:
     if data is None:
         print("Failed to load data.")
         return 0
-    
+
     total_score = 0
 
     # Iterate through each row in the DataFrame
     for row in data.itertuples(index=False):
-
         thread_sleep_score = 0
         new_thread_score = 0
 
@@ -50,6 +51,5 @@ def rule_based_solution(file_path) -> int:
 
 
 if __name__ == "__main__":
-
     x = rule_based_solution("src/data/train_set_1.csv")
     print(x)

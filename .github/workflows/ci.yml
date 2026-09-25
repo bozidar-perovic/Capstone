@@ -27,11 +27,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas pytest
 
+      - name: Add repository root to PYTHONPATH
+        run: echo "PYTHONPATH=${{ github.workspace }}" >> "$GITHUB_ENV"
+
       - name: Syntax smoke check
         run: python -m compileall src
 
       - name: Run pytest
-        run: pytest
+        run: python -m pytest tests
 
   flake8-lint:
     name: Lint
@@ -49,6 +52,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install flake8
+
+      - name: Add repository root to PYTHONPATH
+        run: echo "PYTHONPATH=${{ github.workspace }}" >> "$GITHUB_ENV"
 
       - name: Run flake8
         run: flake8 src
