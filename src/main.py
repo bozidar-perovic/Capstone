@@ -15,7 +15,7 @@ def load_data(file_path) -> pd.DataFrame | None:
         print("Error: There was a parsing error while reading the file.")
         return None
 
-def rule_based_solution(file_path):
+def rule_based_solution(file_path) -> int:
 
     # Load the data from the CSV file
     data = load_data(file_path)
@@ -23,10 +23,11 @@ def rule_based_solution(file_path):
         print("Failed to load data.")
         return 0
     
+    total_score = 0
+
     # Iterate through each row in the DataFrame
     for row in data.itertuples(index=False):
-        
-        total_score = 0
+
         thread_sleep_score = 0
         new_thread_score = 0
 
@@ -45,7 +46,7 @@ def rule_based_solution(file_path):
 
         total_score += thread_sleep_score + new_thread_score
 
-        return total_score
+    return total_score
 
 
 if __name__ == "__main__":
