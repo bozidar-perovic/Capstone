@@ -18,15 +18,34 @@ def load_data(file_path) -> pd.DataFrame | None:
         return None
 
 
-# Function to extract specific columns from the data for later comparison of flakiness and categories
-def get_comparison_data(data) -> pd.DataFrame | None:
+def create_unique_id(data) -> pd.DataFrame | None:
 
     data = load_data(data)
+
+    if data is None:
+        print("No data provided to create unique IDs.")
+        return None
+
+    data["unique_identifier"] = data.apply(
+        lambda row: f"{row['id']}_{row['project']}_{row['test_name']}", axis=1
+    )
+
+    return data
+
+
+# Function to extract specific columns from the data for later
+# comparison of flakiness and categories
+def get_comparison_data(data) -> pd.DataFrame | None:
+
+    data = create_unique_id(data)
 
     if data is None:
         print("Failed to load data.")
         return None
 
-    data_information = data[["id", "project", "category"]]
+    data["is_flaky"] = data.apply(
+        lambda row: "yes" if row["category"] != 5 else "no", axis=1
+    )
+    data_information = data[["unique_identifier", "category", "label", "is_flaky"]]
 
     return data_information

@@ -1,16 +1,19 @@
-from BaseAnalyzer import BaseAnalyzer
-from utility import load_data
+try:
+    from .BaseAnalyzer import BaseAnalyzer
+    from .utility import create_unique_id
+except ImportError:
+    from BaseAnalyzer import BaseAnalyzer
+    from utility import create_unique_id
 
 
 class RuleBasedAnalyzer(BaseAnalyzer):
     """
-    Represents the keyword analyzer that analyzes the code based on specific keywords that indicate potential flakiness.
-    It extends the BaseAnalyzer class and implements the analyze method to calculate a score based on the presence of these keywords in the code.
-    This class has weights that will change later based on the importanc eof each of the keywords.
+    Represents the keyword analyzer that analyzes the code based on
+    specific keywords that indicate potential flakiness.
 
     Attributes:
-        analyze(self,data): Analyzes the code based on specific keywords and calculates a score indicating potential flakiness.
-
+        analyze(self,data): Analyzes the code based on specific
+        keywords and calculates a score indicating potential flakiness.
 
     Example:
         >>> analyzer = RuleBasedAnalyzer()
@@ -41,11 +44,14 @@ class RuleBasedAnalyzer(BaseAnalyzer):
     def analyze(self, data):
 
         #  Load the data from the CSV file
-        data = load_data(data)
+        data = create_unique_id(data)
 
         if data is None:
             print("Failed to load data.")
             return 0
+
+        # Reset per-run scores so repeated analyze() calls stay aligned to rows.
+        self.scores = []
 
         # Iterate through each row in the DataFrame
         for row in data.itertuples(index=False):
@@ -53,7 +59,10 @@ class RuleBasedAnalyzer(BaseAnalyzer):
             # Extract the full_code from the row
             test_method = row.full_code
 
-            # Each time we will reset the scores to 0. Before it made no sense to do with the @Test at the end which led to many bugs, especially the final flaky_score
+            # Each time we will reset the scores to 0.
+            #  Before it made no sense to do with the
+            # @Test at the end which led to many bugs,
+            # especially the final flaky_score
             self.total_score = 0
             self.thread_sleep_score = 0
             self.new_thread_score = 0
