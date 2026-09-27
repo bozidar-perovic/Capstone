@@ -1,9 +1,5 @@
-try:
-    from .BaseAnalyzer import BaseAnalyzer
-    from .utility import create_unique_id
-except ImportError:
-    from BaseAnalyzer import BaseAnalyzer
-    from utility import create_unique_id
+from .BaseAnalyzer import BaseAnalyzer
+from .utility import create_unique_id
 
 
 class RuleBasedAnalyzer(BaseAnalyzer):
@@ -37,7 +33,6 @@ class RuleBasedAnalyzer(BaseAnalyzer):
         self.random_score = 0
         self.shared_score = 0
         self.sync_score = 0
-        self.time_score = 0
         self.total_score = 0
         self.scores = []
 
@@ -50,7 +45,8 @@ class RuleBasedAnalyzer(BaseAnalyzer):
             print("Failed to load data.")
             return 0
 
-        # Reset per-run scores so repeated analyze() calls stay aligned to rows.
+        # Reset per-run scores so repeated
+        # analyze() calls stay aligned to rows.
         self.scores = []
 
         # Iterate through each row in the DataFrame
@@ -82,9 +78,6 @@ class RuleBasedAnalyzer(BaseAnalyzer):
             if isinstance(test_method, str) and "new Thread(" in test_method:
                 self.new_thread_score = 0.25
 
-            if isinstance(test_method, str) and "Time" in test_method:
-                self.time_score = 0.10
-
             if isinstance(test_method, str) and "await" in test_method:
                 self.await_score = 0.15
 
@@ -97,18 +90,24 @@ class RuleBasedAnalyzer(BaseAnalyzer):
             if isinstance(test_method, str) and "Date" in test_method:
                 self.date_score = 0.1
 
-            if isinstance(test_method, str) and ("Time" or "time" in test_method):
+            if isinstance(test_method, str) and (
+                "Time" in test_method or "time" in test_method
+            ):
                 self.time_score = 0.1
 
             if isinstance(test_method, str) and (
-                "Api" in test_method or "api" in test_method or "API" in test_method
+                "Api" in test_method
+                or "api" in test_method
+                or "API" in test_method
             ):
                 self.api_score = 0.05
 
             if isinstance(test_method, str) and "Random" in test_method:
                 self.random_score = 0.3
 
-            if isinstance(test_method, str) and ("Shared" or "share" in test_method):
+            if isinstance(test_method, str) and (
+                "Shared" in test_method or "share" in test_method
+            ):
                 self.shared_score = 0.15
 
             if isinstance(test_method, str) and "sync" in test_method:
@@ -126,7 +125,6 @@ class RuleBasedAnalyzer(BaseAnalyzer):
                 + self.random_score
                 + self.shared_score
                 + self.sync_score
-                + self.time_score
             )
 
             self.scores.append(self.total_score)

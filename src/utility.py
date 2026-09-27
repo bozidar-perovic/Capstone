@@ -46,6 +46,8 @@ def get_comparison_data(data) -> pd.DataFrame | None:
     data["is_flaky"] = data.apply(
         lambda row: "yes" if row["category"] != 5 else "no", axis=1
     )
-    data_information = data[["unique_identifier", "category", "label", "is_flaky"]]
+    data_information = data[
+        ["unique_identifier", "category", "label", "is_flaky"]
+    ]
 
     return data_information

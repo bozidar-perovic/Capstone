@@ -1,5 +1,5 @@
-from RuleBasedAnalyzer import RuleBasedAnalyzer
-from utility import get_comparison_data
+from .RuleBasedAnalyzer import RuleBasedAnalyzer
+from .utility import get_comparison_data
 
 if __name__ == "__main__":
     rule_based_analyzer = RuleBasedAnalyzer()

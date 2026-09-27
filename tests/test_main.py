@@ -26,40 +26,47 @@ def test_load_data_missing_file(tmp_path):
     assert data is None
 
 
-# Testing the load data function with a valid file that has the required columns
+# Check comparison fields using a CSV with all required columns.
 def test_get_comparison_data_valid_file(tmp_path):
     csv_file = tmp_path / "sample.csv"
     csv_file.write_text(
-        "id,project,category\n1,Project1,Category1\n2,Project2,Category2\n"
+        "id,project,test_name,category,label\n"
+        "1,Project1,testOne,5,non-flaky\n"
+        "2,Project2,testTwo,0,async wait\n"
     )
 
     data = get_comparison_data(csv_file)
 
     assert data is not None
     assert isinstance(data, pd.DataFrame)
-    assert list(data.columns) == ["id", "project", "category"]
-    assert data.loc[0, "id"] == 1
-    assert data.loc[0, "project"] == "Project1"
-    assert data.loc[0, "category"] == "Category1"
+    assert list(data.columns) == [
+        "unique_identifier", "category", "label", "is_flaky"
+    ]
+    assert data.loc[0, "unique_identifier"] == "1_Project1_testOne"
+    assert data.loc[0, "is_flaky"] == "no"
+    assert data.loc[1, "unique_identifier"] == "2_Project2_testTwo"
+    assert data.loc[1, "is_flaky"] == "yes"
 
 
-# Testing the hardcoded solution with all the matching rows in the CSV file
-def test_rule_based_solution_counts_all_matching_rows(tmp_path):
+# The analyzer scores every row and resets scores between rows and runs.
+def test_rule_based_analyzer_scores_rows_independently(tmp_path):
     csv_file = tmp_path / "rules.csv"
-    csv_file.write_text(
-        "full_code\n"
-        "Thread.sleep(1000);\n"
-        "TimeUnit.SECONDS.sleep(1);\n"
-        "await someAsyncMethod();\n"
-        "ExecutorService executor = Executors.newFixedThreadPool(10);\n"
-        "AtomicInteger atomicInt = new AtomicInteger(0);\n"
-        "Date date = new Date();\n"
-        "Random random = new Random();\n"
-        "SharedResource shared = new SharedResource();\n"
-        "synchronized (lock) { /* critical section */ }\n"
-        "new Thread(() -> {}).start();\n"
-        "api_call();\n"
-        'System.out.println("clean");\n'
-    )
+    pd.DataFrame(
+        {
+            "id": [1, 2, 3],
+            "project": ["Project1"] * 3,
+            "test_name": ["sleepTest", "cleanTest", "threadTest"],
+            "full_code": [
+                "Thread.sleep(1000);",
+                'System.out.println("clean");',
+                "new Thread(() -> {}).start();",
+            ],
+        }
+    ).to_csv(csv_file, index=False)
+
     analyzer = RuleBasedAnalyzer()
-    analyzer.analyze(csv_file)
+    first_result = analyzer.analyze(csv_file)
+    second_result = analyzer.analyze(csv_file)
+
+    assert first_result["flaky_score"].tolist() == [0.35, 0.0, 0.25]
+    assert second_result["flaky_score"].tolist() == [0.35, 0.0, 0.25]
