@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas pytest
+          pip install pandas pytest scikit-learn
 
       - name: Add repository root to PYTHONPATH
         run: echo "PYTHONPATH=${{ github.workspace }}" >> "$GITHUB_ENV"

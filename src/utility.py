@@ -51,3 +51,8 @@ def get_comparison_data(data) -> pd.DataFrame | None:
     ]
 
     return data_information
+
+
+def save_results_to_csv(results, output_file):
+    results.to_csv(output_file, index=False)
+    print(f"Results saved to {output_file}")
