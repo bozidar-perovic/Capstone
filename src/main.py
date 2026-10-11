@@ -1,39 +1,41 @@
-from .RuleBasedAnalyzer import RuleBasedAnalyzer
 from .MLAnalyzer import MLAnalyzer
 from .utility import load_data, save_results_to_csv
-import time
+
+
+def run_ml_fold(fold_number):
+    """Train on one project-based fold, score it, and save results."""
+    train_path = f"src/data/train_set_{fold_number}.csv"
+    test_path = f"src/data/test_set_{fold_number}.csv"
+    output_path = f"src/results/test_set_{fold_number}_results.csv"
+
+    print(f"Running ML analyzer for fold {fold_number}")
+    train_data = load_data(train_path)
+    test_data = load_data(test_path)
+    if train_data is None or test_data is None:
+        print("Could not load the fold data; skipping this fold.")
+        return
+
+    print(
+        f"Loaded {len(train_data)} training tests and " f"{len(test_data)} test tests."
+    )
+    print("Extracting source-code features and training " "logistic regression...")
+    analyzer = MLAnalyzer()
+    analyzer.train(train_data)
+    print(f"Model trained with features: {list(analyzer.FEATURE_PATTERNS)}")
+
+    print("Scoring held-out test rows...")
+    results = analyzer.analyze(test_data)
+    save_results_to_csv(results, output_path)
+
+    if "test_name" in results.columns:
+        print("Top 5 tests by predicted flaky risk:")
+        print(
+            results.nlargest(5, "flaky_score")[["test_name", "flaky_score"]].to_string(
+                index=False
+            )
+        )
+
 
 if __name__ == "__main__":
-    rule_based_analyzer = RuleBasedAnalyzer()
-
-    print(rule_based_analyzer.analyze("src/data/test_set_1.csv"))
-    print(
-        f"Performance: {rule_based_analyzer.time_passed('src/data/test_set_1.csv'):.2f} seconds"
-    )
-    # train_data = load_data("src/data/train_set_1.csv")
-    # ml_analyzer.train(train_data)
-    # ml_analyzer.analyze(train_data)
-    # test_data = load_data("src/data/test_set_1.csv")
-    # results = ml_analyzer.analyze(test_data)
-    # save_results_to_csv(results, "src/results/test_set_1_results.csv")
-
-    # train_data = load_data("src/data/train_set_2.csv")
-    # ml_analyzer.train(train_data)
-    # ml_analyzer.analyze(train_data)
-    # test_data = load_data("src/data/test_set_2.csv")
-    # results = ml_analyzer.analyze(test_data)
-    # save_results_to_csv(results, "src/results/test_set_2_results.csv")
-
-    # train_data = load_data("src/data/train_set_3.csv")
-    # ml_analyzer.train(train_data)
-    # ml_analyzer.analyze(train_data)
-    # test_data = load_data("src/data/test_set_3.csv")
-    # results = ml_analyzer.analyze(test_data)
-    # save_results_to_csv(results, "src/results/test_set_3_results.csv")
-
-    # train_data = load_data("src/data/train_set_4.csv")
-    # ml_analyzer.train(train_data)
-    # ml_analyzer.analyze(train_data)
-    # test_data = load_data("src/data/test_set_4.csv")
-    # results = ml_analyzer.analyze(test_data)
-    # save_results_to_csv(results, "src/results/test_set_4_results.csv")
+    for fold in (1, 2):
+        run_ml_fold(fold)

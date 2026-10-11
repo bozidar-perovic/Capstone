@@ -72,7 +72,9 @@ class RuleBasedAnalyzer(BaseAnalyzer):
                 self.total_score += 0.1
 
             if isinstance(test_method, str) and (
-                "Api" in test_method or "api" in test_method or "API" in test_method
+                "Api" in test_method
+                or "api" in test_method
+                or "API" in test_method
             ):
                 self.total_score += 0.05
 
