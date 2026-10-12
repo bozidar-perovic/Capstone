@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -18,7 +19,9 @@ def test_ml_analyzer_scores_unlabeled_test_rows():
             "category": [0, 1, 0, 5, 5, 5],
         }
     )
-    test_data = pd.DataFrame({"full_code": ["Thread.sleep(3);", "assertTrue(true);"]})
+    test_data = pd.DataFrame(
+        {"full_code": ["Thread.sleep(3);", "assertTrue(true);"]}
+    )
 
     analyzer = MLAnalyzer()
     analyzer.train(train_data)
@@ -33,7 +36,8 @@ def test_extract_features_counts_each_row_independently():
     data = pd.DataFrame(
         {
             "full_code": [
-                "Thread.sleep(1); Thread.sleep (timeout); new Thread(task); await();",
+                "Thread.sleep(1); Thread.sleep (timeout); "
+                "new Thread(task); await();",
                 "new  Thread (task); await(); await();",
                 None,
             ]
@@ -84,6 +88,48 @@ def test_extract_features_detects_additional_signal_groups():
     }
     for name, count in expected.items():
         assert features[name] == count
+
+
+def test_ml_pipeline_log_scales_and_fits_scaler_only_on_training_rows():
+    train = pd.DataFrame({
+        "full_code": ["", "assertTrue(ok);" * 93, "Thread.sleep(1);"],
+        "category": [5, 5, 0],
+    })
+    analyzer = MLAnalyzer(max_count=5).train(train)
+    raw = analyzer.extract_features(train)
+    clipped = analyzer.model.named_steps["clip"].transform(raw)
+    np.testing.assert_allclose(clipped, np.clip(raw, 0, 5))
+
+    logged = analyzer.model.named_steps["log"].transform(clipped)
+    np.testing.assert_allclose(logged, np.log1p(np.clip(raw, 0, 5)))
+
+    assertion_column = raw.columns.get_loc("assertion_count")
+    assert logged[0, assertion_column] == 0
+    # 93 assertions is capped at 5 before log-scaling
+    assert logged[1, assertion_column] == pytest.approx(np.log1p(5))
+
+    scaler = analyzer.model.named_steps["scaler"]
+    expected_mean = np.log1p(np.clip(raw, 0, 5)).mean(axis=0)
+    np.testing.assert_allclose(scaler.mean_, expected_mean)
+    original_mean = scaler.mean_.copy()
+    original_scale = scaler.scale_.copy()
+    analyzer.analyze(pd.DataFrame({"full_code": ["assertTrue(ok);" * 1000]}))
+    np.testing.assert_array_equal(scaler.mean_, original_mean)
+    np.testing.assert_array_equal(scaler.scale_, original_scale)
+    assert scaler.n_samples_seen_ == len(train)
+
+
+def test_ml_analyzer_supports_uncapped_mode():
+    train = pd.DataFrame({
+        "full_code": ["", "assertTrue(ok);" * 93, "Thread.sleep(1);"],
+        "category": [5, 5, 0],
+    })
+    analyzer = MLAnalyzer(max_count=None).train(train)
+    assert "clip" not in analyzer.model.named_steps
+    raw = analyzer.extract_features(train)
+    logged = analyzer.model.named_steps["log"].transform(raw)
+    assertion_column = raw.columns.get_loc("assertion_count")
+    assert logged[1, assertion_column] == pytest.approx(np.log1p(93))
 
 
 def test_ml_analyzer_requires_training_before_scoring():
