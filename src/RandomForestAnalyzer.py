@@ -7,7 +7,10 @@ from .BaseAnalyzer import BaseAnalyzer
 from .features import FEATURE_PATTERNS, extract_features
 
 ClassWeight = (
-    Literal["balanced", "balanced_subsample"] | Mapping | Sequence[Mapping] | None
+    Literal["balanced", "balanced_subsample"]
+    | Mapping
+    | Sequence[Mapping]
+    | None
 )
 
 

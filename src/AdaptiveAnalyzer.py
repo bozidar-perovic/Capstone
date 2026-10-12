@@ -12,6 +12,7 @@ Implements the multi-stage architecture defined in the capstone guide:
 
 from typing import Any, Dict, Optional
 import numpy as np
+import pandas as pd
 
 from .BaseAnalyzer import BaseAnalyzer
 from .features import FEATURE_PATTERNS
@@ -77,7 +78,7 @@ class AdaptiveAnalyzer(BaseAnalyzer):
 
         return score
 
-    def train(self, train_data):
+    def train(self, train_data: pd.DataFrame):
         """Train the underlying ML analyzer on training data."""
         self.ml_analyzer.train(train_data)
         self._is_trained = True

@@ -106,7 +106,7 @@ def compute_ranking_metrics(
     }
 
     for k in k_percents:
-        k_int = int(k) if k.is_integer() else k
+        k_int = int(k) if int(k) == k else k
         metrics[f"recall@{k_int}%"] = recall_at_k_percent(
             y_true_arr, y_scores_arr, k_percent=k
         )
