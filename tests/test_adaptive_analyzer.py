@@ -1,3 +1,13 @@
+"""Unit tests for AdaptiveAnalyzer.
+
+Verifies:
+- Training requirement prior to test scoring.
+- Correct 3-zone routing (fast clean, ambiguous ML deep, fast flaky).
+- Accuracy of routing summary statistics (counts and percentages).
+- Interoperability with alternative ML backends (e.g., RandomForestAnalyzer).
+- Shared weight handling for thread instantiation and execution.
+"""
+
 import pandas as pd
 import pytest
 
@@ -6,12 +16,14 @@ from src.RandomForestAnalyzer import RandomForestAnalyzer
 
 
 def test_adaptive_analyzer_requires_training_before_scoring():
+    """Verify ValueError is raised if analyze is called before train."""
     analyzer = AdaptiveAnalyzer()
     with pytest.raises(ValueError, match="Train the model"):
         analyzer.analyze(pd.DataFrame({"full_code": ["Thread.sleep(1);"]}))
 
 
 def test_adaptive_analyzer_routes_three_zones_correctly():
+    """Verify tests are routed to fast_clean, ml_deep, or fast_flaky."""
     train_data = pd.DataFrame(
         {
             "full_code": [
@@ -45,6 +57,7 @@ def test_adaptive_analyzer_routes_three_zones_correctly():
 
 
 def test_adaptive_analyzer_routing_summary():
+    """Verify get_routing_summary returns accurate zone counts and rates."""
     train_data = pd.DataFrame(
         {
             "full_code": ["Thread.sleep(1);", "assertTrue(ok);"],
@@ -73,6 +86,7 @@ def test_adaptive_analyzer_routing_summary():
 
 
 def test_adaptive_analyzer_with_random_forest_backend():
+    """Verify AdaptiveAnalyzer works seamlessly with RandomForestAnalyzer."""
     train_data = pd.DataFrame(
         {
             "full_code": ["Thread.sleep(1);", "assertTrue(ok);"],
@@ -90,6 +104,7 @@ def test_adaptive_analyzer_with_random_forest_backend():
 
 
 def test_adaptive_analyzer_does_not_double_count_thread_start():
+    """Verify compound thread creation and start statements share weight."""
     analyzer = AdaptiveAnalyzer()
     # "new Thread(task).start();" has both thread_creation and thread_start
     score = analyzer.compute_rule_score("new Thread(task).start();")

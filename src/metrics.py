@@ -1,9 +1,12 @@
 """Evaluation metrics for flaky test prioritization.
 
 Implements the quality grading metrics defined in the capstone guide:
-- ROC-AUC: Area under ROC curve.
-- Recall@K%: Fraction of flaky tests identified in top K% tests.
-- Precision@K%: Fraction of top K% highest-risk tests that are flaky.
+- ROC-AUC: Area under the Receiver Operating Characteristic curve.
+- PR-AUC: Area under the Precision-Recall curve (Average Precision).
+- Recall@K%: Fraction of all true flaky tests identified within the top K%
+  ranked tests (measuring early capture under tight CI budget constraints).
+- Precision@K%: Fraction of tests in the top K% ranking that are truly flaky
+  (measuring false alarm rate in prioritized investigation queues).
 """
 
 from typing import Dict, Sequence, Union
@@ -19,13 +22,18 @@ def recall_at_k_percent(
 ) -> float:
     """Calculate the recall of positive cases in the top K% ranked items.
 
+    Ranks test methods in descending order of predicted flaky risk score and
+    determines what fraction of all true flaky tests appear in the top K%
+    of the ranking.
+
     Args:
         y_true: Binary ground truth indicators (1 for flaky, 0 for non-flaky).
         y_scores: Continuous risk scores / probabilities (higher = more flaky).
-        k_percent: Cutoff percentile between 0 and 100 (e.g. 5, 10, 20).
+        k_percent: Cutoff percentile between 0 and 100 (e.g. 5.0, 10.0, 20.0).
 
     Returns:
         Fraction of all positive items captured within the top K% ranking.
+        Returns 0.0 if there are no positive items in y_true.
     """
     y_true_arr = np.asarray(y_true)
     y_scores_arr = np.asarray(y_scores)
@@ -51,13 +59,18 @@ def precision_at_k_percent(
 ) -> float:
     """Calculate precision among the top K% ranked items.
 
+    Ranks test methods in descending order of predicted flaky risk score and
+    calculates what proportion of the top K% highest-risk tests are actually
+    flaky.
+
     Args:
         y_true: Binary ground truth indicators (1 for flaky, 0 for non-flaky).
         y_scores: Continuous risk scores / probabilities (higher = more flaky).
-        k_percent: Cutoff percentile between 0 and 100 (e.g. 5, 10, 20).
+        k_percent: Cutoff percentile between 0 and 100 (e.g. 5.0, 10.0, 20.0).
 
     Returns:
         Fraction of items in the top K% ranking that are positive.
+        Returns 0.0 if the input array is empty.
     """
     y_true_arr = np.asarray(y_true)
     y_scores_arr = np.asarray(y_scores)
@@ -80,7 +93,24 @@ def compute_ranking_metrics(
 ) -> Dict[str, float]:
     """Compute all evaluation metrics defined in the capstone guide.
 
-    Returns a dictionary of scalar metrics for reporting and comparison.
+    Calculates global discrimination metrics (ROC-AUC, PR-AUC) and cutoff
+    prioritization metrics (Recall@K%, Precision@K%) across specified
+    percentile thresholds.
+
+    Args:
+        y_true: Binary ground truth indicators (1 for flaky, 0 for non-flaky).
+        y_scores: Continuous risk scores / probabilities.
+        k_percents: Percentile cutoffs to evaluate (default: 5%, 10%, 20%).
+
+    Returns:
+        A dictionary mapping metric names to scalar float values:
+        - 'total_tests': Total number of evaluated test cases.
+        - 'total_flaky': Total number of true flaky test cases.
+        - 'flaky_rate': Base rate of flakiness in the evaluation set.
+        - 'roc_auc': Receiver Operating Characteristic AUC.
+        - 'pr_auc': Precision-Recall AUC (Average Precision).
+        - 'recall@K%': Recall at each specified percentile K.
+        - 'precision@K%': Precision at each specified percentile K.
     """
     y_true_arr = np.asarray(y_true)
     y_scores_arr = np.asarray(y_scores)
@@ -89,7 +119,7 @@ def compute_ranking_metrics(
     total_flaky = int(np.sum(y_true_arr == 1))
     flaky_rate = (total_flaky / total_tests) if total_tests > 0 else 0.0
 
-    # Guard against single-class splits in small tests
+    # Guard against single-class splits in small unit tests
     if len(np.unique(y_true_arr)) > 1:
         roc_auc = float(roc_auc_score(y_true_arr, y_scores_arr))
         pr_auc = float(average_precision_score(y_true_arr, y_scores_arr))

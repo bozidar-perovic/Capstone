@@ -1,0 +1,12 @@
+Metric,Rule-Based,Logistic Reg,Random Forest,Adaptive Hybrid
+ROC-AUC,0.6309,0.6798,0.6745,0.6618
+PR-AUC,0.1137,0.1213,0.1247,0.1053
+Recall@5%,21.6%,24.5%,20.4%,24.0%
+Recall@10%,33.1%,33.4%,28.5%,33.5%
+Recall@20%,33.1%,42.8%,39.4%,46.6%
+Precision@5%,14.1%,16.2%,13.9%,16.0%
+Precision@10%,11.1%,11.2%,9.5%,11.3%
+Fast Clean (Bypassed ML),N/A,N/A,N/A,82.6%
+ML Routed (Evaluated),0.0%,100.0%,100.0%,16.3%
+Fast Flaky (Bypassed ML),N/A,N/A,N/A,1.1%
+Total ML Workload Saved,100.0%,0.0%,0.0%,83.7%

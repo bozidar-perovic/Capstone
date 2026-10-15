@@ -1,3 +1,23 @@
+"""Execution and cross-validation benchmark runner for flaky test analyzers.
+
+Orchestrates 4-fold project-based cross-validation across all static analyzers:
+1. Rule-Based (RuleBasedAnalyzer): Transparent keyword heuristic scorer.
+2. Logistic Regression (MLAnalyzer): Regularized, class-weighted linear model.
+3. Random Forest (RandomForestAnalyzer): Non-linear ensemble model.
+4. Adaptive Hybrid (AdaptiveAnalyzer): 3-zone heuristic triage routing.
+
+Each model is evaluated on held-out projects (Group K-Fold by repository)
+to ensure models generalize to unseen codebases without data leakage.
+
+Saves predictions for each fold to
+`src/results/test_set_{k}_{model}_results.csv` and writes the
+consolidated 4-fold benchmark summary table to `src/benchmark_summary.csv`.
+"""
+
+from pathlib import Path
+import sys
+from typing import Any, Dict, Optional, Sequence, Tuple, Union
+
 import numpy as np
 import pandas as pd
 
@@ -5,84 +25,99 @@ from .AdaptiveAnalyzer import AdaptiveAnalyzer
 from .metrics import compute_ranking_metrics
 from .MLAnalyzer import MLAnalyzer
 from .RandomForestAnalyzer import RandomForestAnalyzer
+from .RuleBasedAnalyzer import RuleBasedAnalyzer
 from .utility import load_data, save_results_to_csv
 
 
-def print_metrics(name, metrics):
-    """Print formatted evaluation metrics for one model."""
-    print(f"--- {name} Evaluation ---")
-    print(f"  ROC-AUC:        {metrics['roc_auc']:.4f}")
-    print(f"  PR-AUC:         {metrics['pr_auc']:.4f}")
-    print(f"  Recall@5%:      {metrics['recall@5%']:.1%}")
-    print(f"  Recall@10%:     {metrics['recall@10%']:.1%}")
-    print(f"  Recall@20%:     {metrics['recall@20%']:.1%}")
-    print(f"  Precision@5%:   {metrics['precision@5%']:.1%}")
-    print(f"  Precision@10%:  {metrics['precision@10%']:.1%}")
+def run_rule_based_fold(fold_number: int) -> Optional[Dict[str, float]]:
+    """Score one project-based test fold with RuleBasedAnalyzer and evaluate.
+
+    Args:
+        fold_number: Index of the cross-validation fold (1 through 4).
+
+    Returns:
+        Dictionary of ranking metrics on the test fold, or None if data
+        loading failed.
+    """
+    test_path = f"src/data/test_set_{fold_number}.csv"
+    output_path = f"src/results/test_set_{fold_number}_rule_based_results.csv"
+
+    test_data = load_data(test_path)
+    if test_data is None:
+        return None
+
+    # Score held-out test fold using static heuristic indicators
+    analyzer = RuleBasedAnalyzer()
+    results = analyzer.analyze(test_data)
+    if results is None:
+        return None
+    save_results_to_csv(results, output_path)
+
+    metrics = None
+    if "category" in results.columns:
+        y_true = (results["category"] != 5).astype(int)
+        metrics = compute_ranking_metrics(y_true, results["flaky_score"])
+
+    return metrics
 
 
-def run_ml_fold(fold_number):
-    """Train on one project-based fold, score it, and evaluate."""
+def run_ml_fold(fold_number: int) -> Optional[Dict[str, float]]:
+    """Train on one project-based fold, score it, and evaluate.
+
+    Args:
+        fold_number: Index of the cross-validation fold (1 through 4).
+
+    Returns:
+        Dictionary of ranking metrics on the held-out test fold, or None
+        if data loading failed.
+    """
     train_path = f"src/data/train_set_{fold_number}.csv"
     test_path = f"src/data/test_set_{fold_number}.csv"
     output_path = f"src/results/test_set_{fold_number}_results.csv"
 
-    print(f"Running ML analyzer (Logistic Regression) for fold {fold_number}")
     train_data = load_data(train_path)
     test_data = load_data(test_path)
     if train_data is None or test_data is None:
-        print("Could not load the fold data; skipping this fold.")
         return None
 
-    print(
-        f"Loaded {len(train_data)} training tests and "
-        f"{len(test_data)} test tests."
-    )
-    print("Extracting features and training logistic regression...")
+    # Fit Logistic Regression on training fold and score held-out test fold
     analyzer = MLAnalyzer()
     analyzer.train(train_data)
-
-    print("Scoring held-out test rows...")
     results = analyzer.analyze(test_data)
     save_results_to_csv(results, output_path)
 
     metrics = None
     if "category" in results.columns:
+        # Convert multiclass labels to binary:
+        # category 5 = non-flaky (0), categories 0-4 = flaky (1)
         y_true = (results["category"] != 5).astype(int)
         metrics = compute_ranking_metrics(y_true, results["flaky_score"])
-        print_metrics("Logistic Regression", metrics)
-
-    if "test_name" in results.columns:
-        print("Top 5 tests by predicted flaky risk:")
-        top5 = results.nlargest(
-            5, "flaky_score"
-        )[["test_name", "flaky_score"]]
-        print(top5.to_string(index=False))
 
     return metrics
 
 
-def run_rf_fold(fold_number):
-    """Train Random Forest on one fold, score it, and evaluate."""
+def run_rf_fold(fold_number: int) -> Optional[Dict[str, float]]:
+    """Train Random Forest on one fold, score it, and evaluate.
+
+    Args:
+        fold_number: Index of the cross-validation fold (1 through 4).
+
+    Returns:
+        Dictionary of ranking metrics on the held-out test fold, or None
+        if data loading failed.
+    """
     train_path = f"src/data/train_set_{fold_number}.csv"
     test_path = f"src/data/test_set_{fold_number}.csv"
     output_path = f"src/results/test_set_{fold_number}_rf_results.csv"
 
-    print(f"Running Random Forest analyzer for fold {fold_number}")
     train_data = load_data(train_path)
     test_data = load_data(test_path)
     if train_data is None or test_data is None:
-        print("Could not load the fold data; skipping this fold.")
         return None
 
-    print(
-        f"Loaded {len(train_data)} training tests and "
-        f"{len(test_data)} test tests."
-    )
-    print("Extracting features and training Random Forest...")
+    # Fit Random Forest classifier with seed 42 for reproducibility
     analyzer = RandomForestAnalyzer(random_state=42)
     analyzer.train(train_data)
-
-    print("Scoring held-out test rows...")
     results = analyzer.analyze(test_data)
     save_results_to_csv(results, output_path)
 
@@ -90,89 +125,80 @@ def run_rf_fold(fold_number):
     if "category" in results.columns:
         y_true = (results["category"] != 5).astype(int)
         metrics = compute_ranking_metrics(y_true, results["flaky_score"])
-        print_metrics("Random Forest", metrics)
-
-    if "test_name" in results.columns:
-        print("Top 5 tests by predicted flaky risk:")
-        top5 = results.nlargest(
-            5, "flaky_score"
-        )[["test_name", "flaky_score"]]
-        print(top5.to_string(index=False))
 
     return metrics
 
 
-def run_adaptive_fold(fold_number):
-    """Train on one fold, score with AdaptiveAnalyzer, and evaluate."""
+def run_adaptive_fold(
+    fold_number: int
+) -> Tuple[Optional[Dict[str, float]], Optional[Dict[str, Any]]]:
+    """Train on one fold, score with AdaptiveAnalyzer, and evaluate.
+
+    Args:
+        fold_number: Index of the cross-validation fold (1 through 4).
+
+    Returns:
+        Tuple of (metrics_dict, routing_summary_dict), or (None, None)
+        if data loading failed.
+    """
     train_path = f"src/data/train_set_{fold_number}.csv"
     test_path = f"src/data/test_set_{fold_number}.csv"
     output_path = f"src/results/test_set_{fold_number}_adaptive_results.csv"
 
-    print(f"Running Adaptive Hybrid analyzer for fold {fold_number}")
     train_data = load_data(train_path)
     test_data = load_data(test_path)
     if train_data is None or test_data is None:
-        print("Could not load the fold data; skipping this fold.")
         return None, None
 
-    print(
-        f"Loaded {len(train_data)} training tests and "
-        f"{len(test_data)} test tests."
-    )
-    print("Training Adaptive Analyzer (Stage 1 Rules + Stage 2 ML)...")
+    # Adaptive Stage 1 heuristic scan + Stage 2 ML triage
     analyzer = AdaptiveAnalyzer()
     analyzer.train(train_data)
-
-    print("Scoring held-out test rows...")
     results = analyzer.analyze(test_data)
     save_results_to_csv(results, output_path)
 
     routing = analyzer.get_routing_summary()
-    print("Stage 1 Routing Breakdown:")
-    print(
-        f"  Fast Clean:  {routing['fast_clean_count']} tests "
-        f"({routing['fast_clean_pct']:.1%}) [Skips ML]"
-    )
-    print(
-        f"  ML Routed:   {routing['ml_deep_count']} tests "
-        f"({routing['ml_deep_pct']:.1%}) [Requires ML]"
-    )
-    print(
-        f"  Fast Flaky:  {routing['fast_flaky_count']} tests "
-        f"({routing['fast_flaky_pct']:.1%}) [Immediate Flag]"
-    )
 
     metrics = None
     if "category" in results.columns:
         y_true = (results["category"] != 5).astype(int)
         metrics = compute_ranking_metrics(y_true, results["flaky_score"])
-        print_metrics("Adaptive Hybrid", metrics)
-
-    if "test_name" in results.columns:
-        print("Top 5 tests by predicted flaky risk:")
-        top5 = results.nlargest(
-            5, "flaky_score"
-        )[["test_name", "flaky_score", "route"]]
-        print(top5.to_string(index=False))
 
     return metrics, routing
 
 
-def compare_folds(folds=(1, 2, 3, 4)):
-    """Run all folds and print comparative summary table."""
+def compare_folds(
+    folds: Sequence[int] = (1, 2, 3, 4),
+    output_file: Union[str, Path] = "src/benchmark_summary.csv",
+) -> Optional[pd.DataFrame]:
+    """Run all cross-validation folds and save summary benchmark results.
+
+    Evaluates Rule-Based, Logistic Regression, Random Forest, and Adaptive
+    Hybrid analyzers across each fold, aggregates ranking metrics across folds,
+    calculates adaptive routing efficiency, and saves the summary CSV.
+
+    Args:
+        folds: Sequence of fold indices to evaluate (default: 1, 2, 3, 4).
+        output_file: Destination file path for the benchmark summary CSV.
+
+    Returns:
+        Summary DataFrame comparing models across metrics, or None if models
+        failed to evaluate.
+    """
+    rb_all = []
     lr_all = []
     rf_all = []
     adapt_all = []
     routings = []
 
+    # Execute all folds sequentially
     for fold in folds:
-        print(f"\n{'='*25} EVALUATING FOLD {fold} {'='*25}")
+        m_rb = run_rule_based_fold(fold)
         m_lr = run_ml_fold(fold)
-        print()
         m_rf = run_rf_fold(fold)
-        print()
         m_ad, r_ad = run_adaptive_fold(fold)
 
+        if m_rb:
+            rb_all.append(m_rb)
         if m_lr:
             lr_all.append(m_lr)
         if m_rf:
@@ -182,18 +208,15 @@ def compare_folds(folds=(1, 2, 3, 4)):
         if r_ad:
             routings.append(r_ad)
 
-    if lr_all and rf_all and adapt_all:
+    summary_df = None
+    if rb_all and lr_all and rf_all and adapt_all:
+        df_rb = pd.DataFrame(rb_all)
         df_lr = pd.DataFrame(lr_all)
         df_rf = pd.DataFrame(rf_all)
         df_ad = pd.DataFrame(adapt_all)
 
-        print(f"\n{'='*25} 4-FOLD BENCHMARK SUMMARY {'='*25}")
-        header = (
-            f"{'Metric':<16} | {'Logistic Reg':<14} | "
-            f"{'Random Forest':<14} | {'Adaptive Hybrid':<16}"
-        )
-        print(header)
-        print("-" * len(header))
+        # Aggregate ranking metrics (mean across folds)
+        rows = []
         for key, label in [
             ("roc_auc", "ROC-AUC"),
             ("pr_auc", "PR-AUC"),
@@ -203,26 +226,66 @@ def compare_folds(folds=(1, 2, 3, 4)):
             ("precision@5%", "Precision@5%"),
             ("precision@10%", "Precision@10%"),
         ]:
+            v_rb = df_rb[key].mean()
             v_lr = df_lr[key].mean()
             v_rf = df_rf[key].mean()
             v_ad = df_ad[key].mean()
             fmt = ".1%" if "recall" in key or "precision" in key else ".4f"
-            print(
-                f"{label:<16} | {v_lr:<14{fmt}} | "
-                f"{v_rf:<14{fmt}} | {v_ad:<16{fmt}}"
-            )
-        print("=" * len(header))
+            rows.append({
+                "Metric": label,
+                "Rule-Based": f"{v_rb:{fmt}}",
+                "Logistic Reg": f"{v_lr:{fmt}}",
+                "Random Forest": f"{v_rf:{fmt}}",
+                "Adaptive Hybrid": f"{v_ad:{fmt}}",
+            })
 
+        # Append Adaptive Stage 1 triage and efficiency breakdown
         if routings:
             avg_clean = np.mean([r["fast_clean_pct"] for r in routings])
             avg_ml = np.mean([r["ml_deep_pct"] for r in routings])
             avg_flaky = np.mean([r["fast_flaky_pct"] for r in routings])
-            print("\nAdaptive Efficiency (Stage 1 Routing Across 4 Folds):")
-            print(f"  Fast Clean (Bypassed ML):  {avg_clean:.1%}")
-            print(f"  ML Routed  (Evaluated):    {avg_ml:.1%}")
-            print(f"  Fast Flaky (Bypassed ML):  {avg_flaky:.1%}")
-            print(f"  Total ML Workload Saved:   {(1.0 - avg_ml):.1%}")
+            rows.extend([
+                {
+                    "Metric": "Fast Clean (Bypassed ML)",
+                    "Rule-Based": "N/A",
+                    "Logistic Reg": "N/A",
+                    "Random Forest": "N/A",
+                    "Adaptive Hybrid": f"{avg_clean:.1%}",
+                },
+                {
+                    "Metric": "ML Routed (Evaluated)",
+                    "Rule-Based": "0.0%",
+                    "Logistic Reg": "100.0%",
+                    "Random Forest": "100.0%",
+                    "Adaptive Hybrid": f"{avg_ml:.1%}",
+                },
+                {
+                    "Metric": "Fast Flaky (Bypassed ML)",
+                    "Rule-Based": "N/A",
+                    "Logistic Reg": "N/A",
+                    "Random Forest": "N/A",
+                    "Adaptive Hybrid": f"{avg_flaky:.1%}",
+                },
+                {
+                    "Metric": "Total ML Workload Saved",
+                    "Rule-Based": "100.0%",
+                    "Logistic Reg": "0.0%",
+                    "Random Forest": "0.0%",
+                    "Adaptive Hybrid": f"{(1.0 - avg_ml):.1%}",
+                },
+            ])
+
+        # Write summary DataFrame to destination CSV file
+        summary_df = pd.DataFrame(rows)
+        Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+        summary_df.to_csv(output_file, index=False)
+
+    print(f'Process done, saved in the "{output_file}"')
+    return summary_df
 
 
 if __name__ == "__main__":
-    compare_folds(folds=(1, 2, 3, 4))
+    out_path = (
+        sys.argv[1] if len(sys.argv) > 1 else "src/benchmark_summary.csv"
+    )
+    compare_folds(folds=(1, 2, 3, 4), output_file=out_path)

@@ -1,3 +1,14 @@
+"""Unit tests for MLAnalyzer.
+
+Verifies:
+- Risk probability prediction on unlabeled test inputs.
+- Independent row-by-row feature count extraction.
+- Pattern matching across all 14 static signal groups.
+- Proper feature clipping (max_count=5), log1p scaling, and StandardScaler fit.
+- Clean execution in uncapped (max_count=None) mode.
+- Strict enforcement of training before inference.
+"""
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -6,6 +17,7 @@ from src.MLAnalyzer import MLAnalyzer
 
 
 def test_ml_analyzer_scores_unlabeled_test_rows():
+    """Verify MLAnalyzer outputs valid probability scores in [0, 1]."""
     train_data = pd.DataFrame(
         {
             "full_code": [
@@ -33,6 +45,7 @@ def test_ml_analyzer_scores_unlabeled_test_rows():
 
 
 def test_extract_features_counts_each_row_independently():
+    """Verify feature counts are computed independently for each row."""
     data = pd.DataFrame(
         {
             "full_code": [
@@ -59,6 +72,7 @@ def test_extract_features_counts_each_row_independently():
 
 
 def test_extract_features_detects_additional_signal_groups():
+    """Verify regex patterns match each individual feature group."""
     data = pd.DataFrame(
         {
             "full_code": [
@@ -91,6 +105,7 @@ def test_extract_features_detects_additional_signal_groups():
 
 
 def test_ml_pipeline_log_scales_and_fits_scaler_only_on_training_rows():
+    """Verify pipeline clips, log1p-scales, and isolates scaler parameters."""
     train = pd.DataFrame({
         "full_code": ["", "assertTrue(ok);" * 93, "Thread.sleep(1);"],
         "category": [5, 5, 0],
@@ -120,6 +135,7 @@ def test_ml_pipeline_log_scales_and_fits_scaler_only_on_training_rows():
 
 
 def test_ml_analyzer_supports_uncapped_mode():
+    """Verify MLAnalyzer can run without clipping when max_count is None."""
     train = pd.DataFrame({
         "full_code": ["", "assertTrue(ok);" * 93, "Thread.sleep(1);"],
         "category": [5, 5, 0],
@@ -133,6 +149,7 @@ def test_ml_analyzer_supports_uncapped_mode():
 
 
 def test_ml_analyzer_requires_training_before_scoring():
+    """Verify ValueError is raised when scoring without prior training."""
     analyzer = MLAnalyzer()
 
     with pytest.raises(ValueError, match="Train the model"):

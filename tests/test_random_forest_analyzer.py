@@ -1,3 +1,14 @@
+"""Unit tests for RandomForestAnalyzer.
+
+Verifies:
+- Accurate risk probability estimation on test data.
+- Strict training requirement before scoring or querying importances.
+- Gini feature importances formatting and monotonic descending order.
+- Deterministic score reproducibility with fixed random_state.
+- Appropriate weighting ensuring assertion volume alone does not outweigh
+  active concurrency indicators.
+"""
+
 import pandas as pd
 import pytest
 
@@ -5,6 +16,7 @@ from src.RandomForestAnalyzer import RandomForestAnalyzer
 
 
 def test_rf_analyzer_scores_unlabeled_test_rows():
+    """Verify RandomForestAnalyzer predicts continuous probabilities."""
     train_data = pd.DataFrame(
         {
             "full_code": [
@@ -32,6 +44,7 @@ def test_rf_analyzer_scores_unlabeled_test_rows():
 
 
 def test_rf_analyzer_requires_training_before_scoring():
+    """Verify ValueError is raised if analyze is called before training."""
     analyzer = RandomForestAnalyzer()
 
     with pytest.raises(ValueError, match="Train the model"):
@@ -39,6 +52,7 @@ def test_rf_analyzer_requires_training_before_scoring():
 
 
 def test_rf_analyzer_feature_importances():
+    """Verify feature importances sum to 1.0 and are sorted descending."""
     train_data = pd.DataFrame(
         {
             "full_code": [
@@ -66,6 +80,7 @@ def test_rf_analyzer_feature_importances():
 
 
 def test_rf_analyzer_reproducibility():
+    """Verify identical risk predictions across runs with matching seeds."""
     train_data = pd.DataFrame(
         {
             "full_code": [
@@ -89,7 +104,7 @@ def test_rf_analyzer_reproducibility():
 
 
 def test_rf_analyzer_does_not_overpenalize_assertions_without_concurrency():
-    """Verify that 100 assertions alone don't outweigh active concurrency."""
+    """Verify that assertion volume alone does not outweigh concurrency."""
     train_data = pd.DataFrame(
         {
             "full_code": [

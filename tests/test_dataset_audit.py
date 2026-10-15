@@ -1,3 +1,14 @@
+"""Unit tests for dataset_audit data validation and leakage detection tool.
+
+Verifies:
+- Tokenizer precision: comment removal while preserving string literals.
+- Structural issue auditing (unbalanced braces, missing bodies, annotations).
+- Duplicate source hashing and conflicting label detection.
+- Schema validation and category-label alignment.
+- Cross-split overlap detection (projects, code hashes, method names, IDs).
+- CLI report generation without mutating dataset inputs.
+"""
+
 import json
 
 import pandas as pd
@@ -6,6 +17,7 @@ from src.dataset_audit import audit_frame, audit_overlap, main, source_tokens
 
 
 def frame(codes, categories=None):
+    """Helper creating a standard test DataFrame for audit tests."""
     count = len(codes)
     return pd.DataFrame({
         "id": list(range(count)), "project": ["example"] * count,
@@ -16,6 +28,7 @@ def frame(codes, categories=None):
 
 
 def test_source_tokens_preserve_literals_and_ignore_comments():
+    """Verify tokenizer strips comments while preserving string literals."""
     tokens = source_tokens(
         'String url = "http://host/*path*/"; // await\n'
         'char brace = \'}\'; /* { */ String quote = "escaped\\\"quote";'
@@ -28,6 +41,7 @@ def test_source_tokens_preserve_literals_and_ignore_comments():
 
 
 def test_audit_flags_source_problems_without_changing_input():
+    """Verify audit flags malformed syntax without modifying input data."""
     data = frame([
         None, "  ", "// @Test void test() {}", "@BeforeEach void setup() {}",
         "@Test void test()", "@Test void test() { new Runnable() {",
@@ -52,6 +66,7 @@ def test_audit_flags_source_problems_without_changing_input():
 
 
 def test_duplicate_conflicts_ignore_comments_not_literal_whitespace():
+    """Verify duplicate source hashing ignores whitespace differences."""
     data = frame([
         '@Test void test() { String s = "a b"; }',
         '@Test void test(){/* comment */String s="a b";}',
@@ -67,6 +82,7 @@ def test_duplicate_conflicts_ignore_comments_not_literal_whitespace():
 
 
 def test_labels_and_schema_validation():
+    """Verify schema column validation and invalid category detection."""
     data = frame(["@Test void test() {}"] * 4, ["5", "invalid", 6, 1])
     _, issues, _ = audit_frame(data, "tests.csv")
     assert sum(i["issue"] == "invalid_category" for i in issues) == 2
@@ -78,6 +94,7 @@ def test_labels_and_schema_validation():
 
 
 def test_overlap_detects_project_identity_code_name_and_id():
+    """Verify cross-split leakage detector flags project and code overlap."""
     train = frame(["@Test void test() {}"])
     test = train.copy()
     assert {i["kind"] for i in audit_overlap(train, test, 1)} == {
@@ -96,6 +113,7 @@ def test_overlap_detects_project_identity_code_name_and_id():
 
 
 def test_overlap_detects_conflicting_source_hash():
+    """Verify conflicting source hashes across splits are flagged."""
     train = frame(["@Test void test() {}"], categories=[5])
     test = frame(["@Test void test() {}"], categories=[0])
     test["project"] = "different"
@@ -108,6 +126,7 @@ def test_overlap_detects_conflicting_source_hash():
 
 
 def test_cli_writes_reports_and_leaves_files_unchanged(tmp_path):
+    """Verify audit CLI generates reporting files without altering dataset."""
     for split in ("train", "test"):
         frame(["@Test void test() {}"]).to_csv(
             tmp_path / f"{split}_set_1.csv", index=False
