@@ -214,8 +214,6 @@ Following the audit findings, exactly **50 rows** were removed from `FlakeBench_
 │   ├── test_dataset_audit.py          # Unit tests for audit, tokenizing, and overlap detection
 │   └── test_main.py                   # Unit tests for data loading and pipeline helpers
 ├── DELETED_ROWS.csv              # Machine-readable log of dropped duplicate/leakage rows
-├── CAPSTONE_CONTEXT.md           # Capstone discussion context and research scope
-└── CAPSTONE_IMPLEMENTATION_GUIDE.md # Technical implementation specification
 ```
 
 ---
