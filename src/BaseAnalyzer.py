@@ -16,6 +16,24 @@ class BaseAnalyzer(ABC):
     an implementation of the analyze method.
     """
 
+    requires_training: bool = False
+
+    def train(self, train_data: Any) -> "BaseAnalyzer":
+        """Prepare the analyzer; stateless analyzers need no training.
+
+        Trainable subclasses must override this hook and set
+        ``requires_training = True``.
+        """
+        if self.requires_training:
+            raise NotImplementedError(
+                "Trainable analyzers must implement train."
+            )
+        return self
+
+    def get_routing_summary(self) -> dict:
+        """Return optional routing diagnostics after analysis."""
+        return {}
+
     @abstractmethod
     def analyze(self, data: Any) -> Any:
         """Analyze test cases and produce continuous flakiness risk scores.

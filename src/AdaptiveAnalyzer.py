@@ -55,6 +55,8 @@ class AdaptiveAnalyzer(BaseAnalyzer):
             routed through each zone in the most recent analysis run.
     """
 
+    requires_training = True
+
     def __init__(
         self,
         low_threshold: float = 0.0,

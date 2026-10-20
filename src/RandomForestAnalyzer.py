@@ -43,6 +43,8 @@ class RandomForestAnalyzer(BaseAnalyzer):
         FEATURE_PATTERNS: Dictionary of compiled regex patterns.
     """
 
+    requires_training = True
+
     def __init__(
         self,
         n_estimators: int = 100,

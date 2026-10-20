@@ -42,6 +42,8 @@ class MLAnalyzer(BaseAnalyzer):
             for feature extraction.
     """
 
+    requires_training = True
+
     def __init__(self, max_count: Optional[int] = 5) -> None:
         """Initialize MLAnalyzer with clipping and pipeline settings.
 
