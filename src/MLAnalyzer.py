@@ -110,9 +110,7 @@ class MLAnalyzer(BaseAnalyzer):
                 ("scaler", StandardScaler()),
                 (
                     "classifier",
-                    LogisticRegression(
-                        class_weight="balanced", max_iter=1000
-                    ),
+                    LogisticRegression(class_weight="balanced", max_iter=1000),
                 ),
             ]
         )

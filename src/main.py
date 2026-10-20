@@ -68,5 +68,7 @@ def compare_folds(
 
 
 if __name__ == "__main__":
-    out_path = sys.argv[1] if len(sys.argv) > 1 else "src/benchmark_summary.csv"
+    out_path = (
+        sys.argv[1] if len(sys.argv) > 1 else "src/benchmark_summary.csv"
+    )
     compare_folds(output_file=out_path)

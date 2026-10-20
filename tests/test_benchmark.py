@@ -26,7 +26,9 @@ class RecordingAnalyzer(BaseAnalyzer):
 @pytest.mark.parametrize("trainable", [False, True])
 def test_fold_lifecycle(tmp_path, trainable):
     training = pd.DataFrame({"full_code": ["training only"]})
-    testing = pd.DataFrame({"full_code": ["sleep", "clean"], "category": [0, 5]})
+    testing = pd.DataFrame(
+        {"full_code": ["sleep", "clean"], "category": [0, 5]}
+    )
     instances = []
 
     def factory():
@@ -49,7 +51,9 @@ def test_fold_lifecycle(tmp_path, trainable):
     assert loader.call_count == (4 if trainable else 2)
     for instance in instances:
         assert instance.training_data is (training if trainable else None)
-    assert saver.call_args.args[1] == tmp_path / "test_set_2_custom_results.csv"
+    assert saver.call_args.args[1] == (
+        tmp_path / "test_set_2_custom_results.csv"
+    )
     assert "flaky_score" not in testing.columns
 
 
