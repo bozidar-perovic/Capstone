@@ -1,0 +1,16 @@
+[
+  {
+    "candidate_id": "rules_raw",
+    "analyzer": "Rule-Based",
+    "parameters": {
+      "source_mode": "raw"
+    }
+  },
+  {
+    "candidate_id": "rules_masked",
+    "analyzer": "Rule-Based",
+    "parameters": {
+      "source_mode": "masked"
+    }
+  }
+]

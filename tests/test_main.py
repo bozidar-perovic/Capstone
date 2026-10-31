@@ -9,6 +9,7 @@ Verifies:
   compare_folds.
 """
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
@@ -144,10 +145,16 @@ def test_run_rule_based_fold(tmp_path):
         "category": [0, 5],
     })
 
-    with patch("src.main.load_data", return_value=sample_test), \
-         patch("src.main.save_results_to_csv"):
+    with patch("src.main.load_data", return_value=sample_test) as loader, \
+         patch("src.main.save_results_to_csv") as saver:
         metrics = run_rule_based_fold(99)
 
+    loader.assert_called_once_with(
+        Path("src/data/test_set_99.csv")
+    )
+    assert saver.call_args.args[1] == Path(
+        "src/results/test_set_99_rule_based_results.csv"
+    )
     assert metrics is not None
     assert "roc_auc" in metrics
     assert "recall@5%" in metrics

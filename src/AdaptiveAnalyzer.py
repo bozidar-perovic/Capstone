@@ -4,16 +4,17 @@ Implements the multi-stage triage architecture defined in the capstone guide:
 1. Stage 1: Fast regex-based rule scan on all test methods.
 2. Zone 1 (Confidently Clean): Tests with rule_score <= low_threshold receive
    an immediate 0.0 risk score, completely bypassing ML feature extraction
-   and model inference (~82.6% of tests).
+   and model inference (~82.7% of tests).
 3. Zone 3 (Confidently Flaky): Tests with rule_score >= high_threshold receive
    an immediate high risk score (default: 0.95), flagged by strong
    concurrency/timing signals (~1.1% of tests).
 4. Zone 2 (Ambiguous): Tests with low_threshold < rule_score < high_threshold
    are routed to the ML analyzer for fine-grained statistical evaluation
-   (~16.3% of tests).
+   (~16.2% of tests).
 
-This hybrid approach achieves an ~83.7% reduction in ML workload while matching
-or exceeding always-on ML prioritization recall.
+The default original-data benchmark bypasses ML scoring for ~83.8% of tests.
+Either bypass can be disabled to let the same ML backend reconsider that group.
+Measured runtime savings have not yet been established.
 """
 
 from typing import Any, Dict, Optional
@@ -50,6 +51,8 @@ class AdaptiveAnalyzer(BaseAnalyzer):
         high_score: Fixed risk score assigned to fast-flaky tests.
         ml_analyzer: Machine learning model instance used for ambiguous tests.
         rule_weights: Mapping of feature names to Stage 1 heuristic weights.
+        bypass_low: Whether low rule scores skip ML and receive zero.
+        bypass_high: Whether high rule scores skip ML and receive high_score.
         FEATURE_PATTERNS: Dictionary of compiled regex patterns.
         last_routing_summary: Dict recording test counts and percentages
             routed through each zone in the most recent analysis run.
@@ -64,6 +67,8 @@ class AdaptiveAnalyzer(BaseAnalyzer):
         high_score: float = 0.95,
         ml_analyzer: Optional[Any] = None,
         rule_weights: Optional[Dict[str, float]] = None,
+        bypass_low: bool = True,
+        bypass_high: bool = True,
     ) -> None:
         """Initialize the AdaptiveAnalyzer with thresholds and ML backend.
 
@@ -78,6 +83,10 @@ class AdaptiveAnalyzer(BaseAnalyzer):
                 such as RandomForestAnalyzer.
             rule_weights: Optional dictionary of Stage 1 heuristic weights.
                 Defaults to DEFAULT_RULE_WEIGHTS.
+            bypass_low: Keep the low-score shortcut when True. If False,
+                send those tests to the existing ML backend instead.
+            bypass_high: Keep the high-score shortcut when True. If False,
+                send those tests to the existing ML backend instead.
         """
         super().__init__()
         self.low_threshold = low_threshold
@@ -85,6 +94,12 @@ class AdaptiveAnalyzer(BaseAnalyzer):
         self.high_score = high_score
         self.ml_analyzer = ml_analyzer or MLAnalyzer()
         self.rule_weights = rule_weights or DEFAULT_RULE_WEIGHTS
+        if not all(
+            isinstance(flag, bool) for flag in (bypass_low, bypass_high)
+        ):
+            raise ValueError("Bypass settings must be boolean values.")
+        self.bypass_low = bypass_low
+        self.bypass_high = bypass_high
         self.FEATURE_PATTERNS = FEATURE_PATTERNS
         self._is_trained = False
         self.last_routing_summary: Dict[str, Any] = {}
@@ -138,9 +153,9 @@ class AdaptiveAnalyzer(BaseAnalyzer):
         """Prioritize tests using the tiered 3-zone routing algorithm.
 
         1. Computes Stage 1 rule presence score for each test.
-        2. Assigns 0.0 risk to clean tests (Zone 1).
-        3. Assigns 0.95 risk to high-confidence flaky tests (Zone 3).
-        4. Evaluates remaining ambiguous tests with the ML model (Zone 2).
+        2. Assigns 0.0 to low scores if their bypass is enabled.
+        3. Assigns high_score to high scores if their bypass is enabled.
+        4. Evaluates every remaining test with the existing ML backend.
 
         Args:
             data: DataFrame containing test records to score.
@@ -169,12 +184,14 @@ class AdaptiveAnalyzer(BaseAnalyzer):
         routes = np.empty(n, dtype=object)
 
         # Zone 1: Confidently clean -> bypass ML evaluation entirely
-        clean_mask = rule_scores <= self.low_threshold
+        low_rule_mask = rule_scores <= self.low_threshold
+        clean_mask = low_rule_mask & self.bypass_low
         final_scores[clean_mask] = 0.0
         routes[clean_mask] = "fast_clean"
 
         # Zone 3: Confidently high-risk -> flag immediately without ML
-        high_mask = rule_scores >= self.high_threshold
+        high_rule_mask = rule_scores >= self.high_threshold
+        high_mask = high_rule_mask & self.bypass_high
         final_scores[high_mask] = self.high_score
         routes[high_mask] = "fast_flaky"
 
@@ -204,6 +221,8 @@ class AdaptiveAnalyzer(BaseAnalyzer):
             "fast_flaky_pct": (high_count / n) if n > 0 else 0.0,
             "ml_deep_count": mid_count,
             "ml_deep_pct": (mid_count / n) if n > 0 else 0.0,
+            "reconsidered_low_count": int(np.sum(low_rule_mask & mid_mask)),
+            "reconsidered_high_count": int(np.sum(high_rule_mask & mid_mask)),
         }
 
         return result
@@ -216,3 +235,24 @@ class AdaptiveAnalyzer(BaseAnalyzer):
             for 'fast_clean', 'ml_deep', and 'fast_flaky' routes.
         """
         return self.last_routing_summary
+
+
+class AdaptiveRuleScreen(AdaptiveAnalyzer):
+    """Stateless baseline using precisely the adaptive indicators and weights.
+
+    Returns the unchanged rule score directly, with no fixed-score routing or
+    ML fitting/scoring. This isolates the screen from the cascade policy.
+    """
+
+    requires_training = False
+
+    def __init__(self, rule_weights: Optional[Dict[str, float]] = None):
+        super().__init__(rule_weights=rule_weights)
+
+    def analyze(self, data: pd.DataFrame) -> pd.DataFrame:
+        result = data.copy()
+        result["rule_score"] = [
+            self.compute_rule_score(code) for code in data["full_code"]
+        ]
+        result["flaky_score"] = result["rule_score"]
+        return result

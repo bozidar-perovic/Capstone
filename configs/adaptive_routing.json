@@ -1,0 +1,27 @@
+[
+  {
+    "candidate_id": "adaptive_current",
+    "analyzer": "Adaptive Hybrid",
+    "parameters": {"bypass_low": true, "bypass_high": true}
+  },
+  {
+    "candidate_id": "adaptive_reconsider_low",
+    "analyzer": "Adaptive Hybrid",
+    "parameters": {"bypass_low": false, "bypass_high": true}
+  },
+  {
+    "candidate_id": "adaptive_reconsider_high",
+    "analyzer": "Adaptive Hybrid",
+    "parameters": {"bypass_low": true, "bypass_high": false}
+  },
+  {
+    "candidate_id": "adaptive_reconsider_both",
+    "analyzer": "Adaptive Hybrid",
+    "parameters": {"bypass_low": false, "bypass_high": false}
+  },
+  {
+    "candidate_id": "adaptive_rule_screen",
+    "analyzer": "Adaptive Rule Screen",
+    "parameters": {}
+  }
+]

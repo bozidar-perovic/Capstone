@@ -1,0 +1,49 @@
+[
+  {
+    "candidate_id": "rule_based_default",
+    "analyzer": "Rule-Based",
+    "parameters": {
+      "source_mode": "raw"
+    }
+  },
+  {
+    "candidate_id": "logistic_reg_default",
+    "analyzer": "Logistic Reg",
+    "parameters": {
+      "max_count": 5
+    }
+  },
+  {
+    "candidate_id": "random_forest_default",
+    "analyzer": "Random Forest",
+    "parameters": {
+      "n_estimators": 100,
+      "max_depth": 5,
+      "random_state": 42,
+      "class_weight": "balanced"
+    }
+  },
+  {
+    "candidate_id": "adaptive_hybrid_default",
+    "analyzer": "Adaptive Hybrid",
+    "parameters": {
+      "low_threshold": 0.0,
+      "high_threshold": 0.5,
+      "high_score": 0.95,
+      "bypass_low": true,
+      "bypass_high": true,
+      "rule_weights": {
+        "sleep_count": 0.35,
+        "await_count": 0.15,
+        "executor_count": 0.25,
+        "future_count": 0.15,
+        "latch_barrier_count": 0.2,
+        "time_api_count": 0.15,
+        "random_api_count": 0.3,
+        "unordered_collection_count": 0.1,
+        "file_network_count": 0.15
+      },
+      "ml_max_count": 5
+    }
+  }
+]

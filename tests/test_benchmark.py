@@ -1,5 +1,6 @@
 """Tests for the polymorphic benchmark lifecycle."""
 
+from pathlib import Path
 from unittest.mock import Mock
 
 import pandas as pd
@@ -96,3 +97,30 @@ def test_stateless_training_hook():
     analyzer.requires_training = True
     with pytest.raises(NotImplementedError):
         BaseAnalyzer.train(analyzer, pd.DataFrame())
+
+
+def test_default_training_and_testing_use_original_dataset():
+    training = pd.DataFrame({"full_code": ["original training"]})
+    testing = pd.DataFrame(
+        {"full_code": ["original flaky", "original clean"],
+         "category": [0, 5]}
+    )
+    loader = Mock(side_effect=[training, testing])
+    saver = Mock()
+    analyzer = RecordingAnalyzer()
+    analyzer.requires_training = True
+    runner = BenchmarkRunner(loader=loader, saver=saver)
+
+    result = runner.run_fold(
+        AnalyzerSpec("Original", lambda: analyzer, "_original"), 1
+    )
+
+    assert [call.args[0] for call in loader.call_args_list] == [
+        Path("src/data/train_set_1.csv"),
+        Path("src/data/test_set_1.csv"),
+    ]
+    assert analyzer.training_data is training
+    assert result.metrics["total_tests"] == 2
+    assert saver.call_args.args[1] == Path(
+        "src/results/test_set_1_original_results.csv"
+    )

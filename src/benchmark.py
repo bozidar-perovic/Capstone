@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Callable, Dict, Optional, Sequence, Union
 
 import pandas as pd
@@ -13,6 +14,12 @@ from .MLAnalyzer import MLAnalyzer
 from .RandomForestAnalyzer import RandomForestAnalyzer
 from .RuleBasedAnalyzer import RuleBasedAnalyzer
 from .utility import load_data, save_results_to_csv
+
+
+# Canonical original dataset and its benchmark outputs.
+DEFAULT_DATA_DIR = Path("src/data")
+DEFAULT_RESULTS_DIR = Path("src/results")
+DEFAULT_SUMMARY_FILE = DEFAULT_RESULTS_DIR / "benchmark_summary.csv"
 
 
 @dataclass(frozen=True)
@@ -34,10 +41,16 @@ DEFAULT_ANALYZERS = (
 
 @dataclass
 class FoldResult:
-    """Ranking metrics and optional analyzer diagnostics for one fold."""
+    """Quality, routing, and elapsed seconds for one fold.
+
+    Analysis includes the complete analyze call. CSV loading, model creation,
+    metric calculation (including sorting), and CSV export are outside it.
+    Training includes its feature extraction and fitted preprocessing.
+    """
 
     metrics: Optional[Dict[str, float]] = None
     routing: Optional[Dict[str, Any]] = None
+    timings: Optional[Dict[str, Optional[float]]] = None
 
 
 class BenchmarkRunner:
@@ -49,8 +62,8 @@ class BenchmarkRunner:
 
     def __init__(
         self,
-        data_dir: Union[str, Path] = "src/data",
-        results_dir: Union[str, Path] = "src/results",
+        data_dir: Union[str, Path] = DEFAULT_DATA_DIR,
+        results_dir: Union[str, Path] = DEFAULT_RESULTS_DIR,
         analyzers: Sequence[AnalyzerSpec] = DEFAULT_ANALYZERS,
         loader: Callable = load_data,
         saver: Callable = save_results_to_csv,
@@ -61,10 +74,14 @@ class BenchmarkRunner:
         self.loader = loader
         self.saver = saver
 
-    def run_fold(self, spec: AnalyzerSpec, fold_number: int) -> FoldResult:
+    def run_fold(
+        self, spec: AnalyzerSpec, fold_number: int,
+        save_predictions: bool = True,
+    ) -> FoldResult:
         """Load, train if needed, score, save, and evaluate one analyzer."""
         analyzer = spec.factory()
         train_data = None
+        started = perf_counter()
         if analyzer.requires_training:
             train_data = self.loader(
                 self.data_dir / f"train_set_{fold_number}.csv"
@@ -72,30 +89,54 @@ class BenchmarkRunner:
         test_data = self.loader(
             self.data_dir / f"test_set_{fold_number}.csv"
         )
+        loading_seconds = perf_counter() - started
         if test_data is None:
             return FoldResult()
+        training_seconds = None
         if analyzer.requires_training:
             if train_data is None:
                 return FoldResult()
+            started = perf_counter()
             analyzer.train(train_data)
+            training_seconds = perf_counter() - started
+        started = perf_counter()
         results = analyzer.analyze(test_data)
+        analysis_seconds = perf_counter() - started
         if results is None:
             return FoldResult()
-        self.saver(
-            results,
-            self.results_dir
-            / f"test_set_{fold_number}{spec.result_suffix}_results.csv",
-        )
+        reporting_seconds = None
+        if save_predictions:
+            started = perf_counter()
+            self.saver(
+                results,
+                self.results_dir
+                / f"test_set_{fold_number}{spec.result_suffix}_results.csv",
+            )
+            reporting_seconds = perf_counter() - started
+        started = perf_counter()
         metrics = None
         if "category" in results.columns:
             y_true = (results["category"] != 5).astype(int)
             metrics = compute_ranking_metrics(y_true, results["flaky_score"])
-        return FoldResult(metrics, analyzer.get_routing_summary() or None)
+        evaluation_seconds = perf_counter() - started
+        timings = {
+            "data_loading_seconds": loading_seconds,
+            "training_seconds": training_seconds,
+            "analysis_seconds": analysis_seconds,
+            "evaluation_seconds": evaluation_seconds,
+            "reporting_seconds": reporting_seconds,
+            "training_and_analysis_seconds": (
+                (training_seconds or 0.0) + analysis_seconds
+            ),
+        }
+        return FoldResult(
+            metrics, analyzer.get_routing_summary() or None, timings,
+        )
 
     def compare_folds(
         self,
         folds: Sequence[int] = (1, 2, 3, 4),
-        output_file: Union[str, Path] = "src/benchmark_summary.csv",
+        output_file: Union[str, Path] = DEFAULT_SUMMARY_FILE,
         fold_runner: Optional[
             Callable[[AnalyzerSpec, int], FoldResult]
         ] = None,
@@ -107,6 +148,7 @@ class BenchmarkRunner:
         run = fold_runner or self.run_fold
         metrics = {spec.name: [] for spec in self.analyzers}
         routings = []
+        timing_records = []
         for fold in folds:
             for spec in self.analyzers:
                 result = run(spec, fold)
@@ -114,6 +156,11 @@ class BenchmarkRunner:
                     metrics[spec.name].append(result.metrics)
                 if result.routing and spec.name == "Adaptive Hybrid":
                     routings.append(result.routing)
+                if result.timings:
+                    timing_records.append({
+                        "analyzer": spec.name, "fold": fold,
+                        **result.timings,
+                    })
 
         if not metrics or not all(metrics.values()):
             return None
@@ -157,8 +204,35 @@ class BenchmarkRunner:
                 row["Adaptive Hybrid"] = f"{value:.1%}"
                 rows.append(row)
 
+        if timing_records:
+            timing_frame = pd.DataFrame(timing_records)
+            averages = timing_frame.groupby("analyzer").mean(numeric_only=True)
+            for key, label in [
+                ("training_seconds", "Training Time (s)"),
+                ("analysis_seconds", "Analysis Time (s)"),
+                ("training_and_analysis_seconds", "Training + Analysis (s)"),
+                ("evaluation_seconds", "Evaluation Time (s)"),
+                ("reporting_seconds", "Prediction Export Time (s)"),
+                ("data_loading_seconds", "Data Loading Time (s)"),
+            ]:
+                row = {"Metric": label}
+                for spec in self.analyzers:
+                    value = (
+                        averages.loc[spec.name, key]
+                        if spec.name in averages.index else float("nan")
+                    )
+                    row[spec.name] = (
+                        "N/A" if pd.isna(value) else f"{value:.6f}"
+                    )
+                rows.append(row)
+
         summary = pd.DataFrame(rows)
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         summary.to_csv(output_file, index=False)
+        if timing_records:
+            timing_path = Path(output_file).with_name(
+                f"{Path(output_file).stem}_timings.csv"
+            )
+            pd.DataFrame(timing_records).to_csv(timing_path, index=False)
         print(f'Process done, saved in the "{output_file}"')
         return summary

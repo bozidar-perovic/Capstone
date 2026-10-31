@@ -17,12 +17,13 @@ prevent double-counting compound statements like `new Thread(task).start()`.
 
 from pathlib import Path
 import time
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union
 
 import pandas as pd
 
 from .BaseAnalyzer import BaseAnalyzer
 from .features import FEATURE_PATTERNS
+from .java_source import mask_non_code
 from .utility import create_unique_id
 
 
@@ -38,9 +39,16 @@ class RuleBasedAnalyzer(BaseAnalyzer):
             most recently analyzed batch of tests.
     """
 
-    def __init__(self) -> None:
-        """Initialize the rule-based analyzer with empty score accumulators."""
+    def __init__(self, source_mode: Literal["raw", "masked"] = "raw") -> None:
+        """Choose raw baseline or comment/literal masking; keep rule weights.
+
+        Masking changes only the text searched internally. Original full_code
+        values and row order are preserved in the returned predictions.
+        """
         super().__init__()
+        if source_mode not in ("raw", "masked"):
+            raise ValueError("source_mode must be 'raw' or 'masked'.")
+        self.source_mode = source_mode
         self.total_score: float = 0.0
         self.scores: List[float] = []
 
@@ -90,6 +98,8 @@ class RuleBasedAnalyzer(BaseAnalyzer):
             self.total_score = 0.0
 
             if isinstance(test_method, str) and test_method:
+                if self.source_mode == "masked":
+                    test_method = mask_non_code(test_method)
                 # Thread.sleep is one of the strongest empirical indicators
                 # of timing flakiness and race condition masking.
                 if FEATURE_PATTERNS["sleep_count"].search(test_method):
