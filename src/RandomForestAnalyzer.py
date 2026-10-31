@@ -7,7 +7,7 @@ simple linear models might miss.
 Features:
 - Depth-constrained trees (max_depth=5) to prevent overfitting on small
   flaky test subsets.
-- Balanced class weights to accommodate heavy class imbalance (~2-3% flaky).
+- Balanced class weights to account for class imbalance.
 - Gini impurity-based feature importance querying to identify the strongest
   static flakiness predictors across repositories.
 """

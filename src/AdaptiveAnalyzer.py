@@ -4,17 +4,14 @@ Implements the multi-stage triage architecture defined in the capstone guide:
 1. Stage 1: Fast regex-based rule scan on all test methods.
 2. Zone 1 (Confidently Clean): Tests with rule_score <= low_threshold receive
    an immediate 0.0 risk score, completely bypassing ML feature extraction
-   and model inference (~82.7% of tests).
+   and model inference.
 3. Zone 3 (Confidently Flaky): Tests with rule_score >= high_threshold receive
    an immediate high risk score (default: 0.95), flagged by strong
-   concurrency/timing signals (~1.1% of tests).
+   concurrency/timing signals.
 4. Zone 2 (Ambiguous): Tests with low_threshold < rule_score < high_threshold
-   are routed to the ML analyzer for fine-grained statistical evaluation
-   (~16.2% of tests).
+   are routed to the ML analyzer for statistical evaluation.
 
-The default original-data benchmark bypasses ML scoring for ~83.8% of tests.
 Either bypass can be disabled to let the same ML backend reconsider that group.
-Measured runtime savings have not yet been established.
 """
 
 from typing import Any, Dict, Optional
@@ -42,8 +39,7 @@ DEFAULT_RULE_WEIGHTS: Dict[str, float] = {
 class AdaptiveAnalyzer(BaseAnalyzer):
     """Tiered analyzer routing tests to fast rules or machine learning.
 
-    Orchestrates a 3-zone decision boundary to minimize inference latency
-    while preserving high ranking quality on ambiguous tests.
+    Screens test methods and delegates selected routes to the ML backend.
 
     Attributes:
         low_threshold: Cutoff below which tests bypass ML as clean.
@@ -208,7 +204,7 @@ class AdaptiveAnalyzer(BaseAnalyzer):
         result["route"] = routes
         result["rule_score"] = rule_scores
 
-        # Record routing metrics for efficiency and cost reduction analysis
+        # Record counts and percentages for each route.
         clean_count = int(np.sum(clean_mask))
         high_count = int(np.sum(high_mask))
         mid_count = int(np.sum(mid_mask))

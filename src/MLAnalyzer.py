@@ -13,8 +13,7 @@ the peculiarities of static test-code features:
 3. Feature standardization (StandardScaler): Centers and scales features to
    unit variance so regularized coefficients are treated fairly.
 4. Balanced Logistic Regression: Automatically adjusts class weights inversely
-   proportional to class frequencies to counteract extreme class imbalance
-   (~2-3% flaky tests).
+   proportional to class frequencies to account for class imbalance.
 """
 
 from typing import Optional

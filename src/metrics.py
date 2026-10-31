@@ -2,11 +2,10 @@
 
 Implements the quality grading metrics defined in the capstone guide:
 - ROC-AUC: Area under the Receiver Operating Characteristic curve.
-- PR-AUC: Area under the Precision-Recall curve (Average Precision).
+- PR-AUC: Legacy report label for sklearn Average Precision.
 - Recall@K%: Fraction of all true flaky tests identified within the top K%
   ranked tests (measuring early capture under tight CI budget constraints).
-- Precision@K%: Fraction of tests in the top K% ranking that are truly flaky
-  (measuring false alarm rate in prioritized investigation queues).
+- Precision@K%: Fraction of tests in the top K% ranking labeled flaky.
 """
 
 from typing import Dict, Sequence, Union
